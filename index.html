@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>快递领取管理</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#4f46e5" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="快递领取" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --primary: #4f46e5;
+    --primary-dark: #4338ca;
+    --amber: #d97706;
+    --amber-bg: #fef3c7;
+    --green: #059669;
+    --green-bg: #d1fae5;
+    --red: #dc2626;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .app { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+  header h1 { font-size: 22px; margin: 0; display: flex; align-items: center; gap: 8px; }
+  .storage-tip { font-size: 12px; color: var(--muted); }
+  .stats { display: flex; gap: 10px; }
+  .stat {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 14px; font-size: 13px; color: var(--muted); box-shadow: var(--shadow);
+  }
+  .stat b { font-size: 18px; margin-left: 6px; }
+  .stat.pending b { color: var(--amber); }
+  .stat.picked b { color: var(--green); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px; box-shadow: var(--shadow); margin-bottom: 18px;
+  }
+  .card h2 { margin: 0 0 14px; font-size: 16px; }
+
+  .form-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .form-grid .field { display: flex; flex-direction: column; gap: 5px; }
+  .form-grid label { font-size: 12px; color: var(--muted); }
+  input, select {
+    font: inherit; padding: 9px 11px; border: 1px solid var(--border); border-radius: 9px;
+    background: #fff; color: var(--text); outline: none; width: 100%;
+  }
+  input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+  .btn {
+    font: inherit; border: none; border-radius: 9px; padding: 9px 16px; cursor: pointer;
+    background: var(--primary); color: #fff; font-weight: 600; transition: background .15s;
+  }
+  .btn:hover { background: var(--primary-dark); }
+  .btn-add { align-self: end; }
+  .owner-options { margin-top: 14px; display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+  .owner-options-label { font-size: 12px; color: var(--muted); padding-top: 5px; white-space: nowrap; }
+  #ownerOptions { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px 3px 10px;
+    background: #eef2ff; color: var(--primary); border-radius: 999px; font-size: 12px; font-weight: 600;
+  }
+  .chip-del {
+    border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px;
+    line-height: 1; padding: 0 4px; border-radius: 50%; transition: all .15s;
+  }
+  .chip-del:hover { color: var(--red); background: #fce8e6; }
+
+  .toolbar { margin-bottom: 14px; }
+  .toolbar input { max-width: 320px; }
+
+  .section { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 18px; overflow: hidden; }
+  .section-head { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; }
+  .section-head h2 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .count-pill { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 10px; }
+  .count-pill.amber { background: var(--amber-bg); color: var(--amber); }
+  .count-pill.green { background: var(--green-bg); color: var(--green); }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+  .seg button {
+    border: none; background: #fff; padding: 6px 12px; font: inherit; font-size: 12px;
+    color: var(--muted); cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button.active { background: var(--primary); color: #fff; }
+
+  ul.records { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+  .record {
+    display: flex; align-items: center; gap: 14px; padding: 13px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .record:last-child { border-bottom: none; }
+  .record:hover { background: #fafafa; }
+
+  .check-label { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; flex-shrink: 0; }
+  .check-label input { display: none; }
+  .custom-check {
+    width: 22px; height: 22px; border-radius: 6px; border: 2px solid #cbd5e1;
+    display: inline-flex; align-items: center; justify-content: center; transition: all .15s; flex-shrink: 0;
+  }
+  .check-label input:checked + .custom-check { background: var(--green); border-color: var(--green); }
+  .check-label input:checked + .custom-check::after { content: "✓"; color: #fff; font-size: 14px; line-height: 1; }
+
+  .record-main { flex: 1; min-width: 0; }
+  .record-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .badge {
+    font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 6px;
+    background: #eef2ff; color: var(--primary);
+  }
+  .code { font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .5px; }
+  .record-meta { font-size: 13px; color: var(--muted); margin-top: 3px; }
+  .time-chip { font-size: 12px; color: var(--green); background: var(--green-bg); border-radius: 6px; padding: 2px 8px; font-weight: 600; }
+
+  .icon-btn {
+    border: 1px solid var(--border); background: #fff; border-radius: 8px; padding: 6px 10px;
+    cursor: pointer; font-size: 12px; color: var(--muted); transition: all .15s; white-space: nowrap;
+  }
+  .icon-btn:hover { border-color: #cbd5e1; color: var(--text); }
+  .icon-btn.danger:hover { border-color: #fca5a5; color: var(--red); }
+
+  .empty { padding: 28px; text-align: center; color: var(--muted); font-size: 14px; }
+
+  details.picked-section > summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+    padding: 15px 18px; user-select: none;
+  }
+  details.picked-section > summary::-webkit-details-marker { display: none; }
+  details.picked-section > summary .arrow { transition: transform .2s; }
+  details.picked-section[open] > summary .arrow { transform: rotate(180deg); }
+  .summary-title { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; }
+  details.picked-section > summary .summary-right { display: inline-flex; align-items: center; gap: 10px; }
+
+  details.date-group { border-top: 1px solid var(--border); }
+  details.date-group > summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 18px; background: #fafafa; user-select: none; font-weight: 600; font-size: 14px;
+  }
+  details.date-group > summary::-webkit-details-marker { display: none; }
+  details.date-group > summary .arrow { transition: transform .2s; color: var(--muted); }
+  details.date-group[open] > summary .arrow { transform: rotate(180deg); }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px);
+    background: #111827; color: #fff; padding: 10px 18px; border-radius: 10px; font-size: 14px;
+    opacity: 0; pointer-events: none; transition: all .25s; box-shadow: 0 8px 24px rgba(0,0,0,.25); z-index: 50;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 680px) {
+    .form-grid { grid-template-columns: 1fr 1fr; }
+    .record { flex-wrap: wrap; }
+    .check-label { order: 2; }
+  }
+.check-text { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>📦 快递领取管理</h1>
+      <div class="storage-tip">数据保存在浏览器本地（localStorage），无需联网。</div>
+    </div>
+    <div class="stats">
+      <div class="stat pending">待领取<b id="statPending">0</b></div>
+      <div class="stat picked">已领取<b id="statPicked">0</b></div>
+    </div>
+  </header>
+
+  <section class="card">
+    <h2>＋ 录入新快递</h2>
+    <form id="addForm" class="form-grid" autocomplete="off">
+      <div class="field">
+        <label for="fCode">取件码 *</label>
+        <input id="fCode" placeholder="例如 1-2-3456" required />
+      </div>
+      <div class="field">
+        <label for="fCompany">快递公司 *</label>
+        <input id="fCompany" list="companyList" placeholder="选择或输入" required />
+        <datalist id="companyList">
+          <option value="中通"></option>
+          <option value="圆通"></option>
+          <option value="申通"></option>
+          <option value="韵达"></option>
+          <option value="顺丰"></option>
+          <option value="京东"></option>
+          <option value="邮政EMS"></option>
+          <option value="极兔"></option>
+          <option value="德邦"></option>
+          <option value="菜鸟"></option>
+          <option value="其他"></option>
+        </datalist>
+      </div>
+      <div class="field">
+        <label for="fOwner">所属人 *</label>
+        <input id="fOwner" list="ownerList" placeholder="选择或输入姓名" required /><datalist id="ownerList"></datalist>
+      </div>
+      <div class="field">
+        <label for="fNote">备注</label>
+        <input id="fNote" placeholder="选填" />
+      </div>
+      <button type="submit" class="btn btn-add">添加</button>
+    </form>
+    <div class="owner-options">
+      <span class="owner-options-label">所属人选项：</span>
+      <span id="ownerOptions"></span>
+    </div>
+  </section>
+
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="🔍 搜索取件码 / 公司 / 所属人 / 备注" />
+  </div>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>⏳ 待领取 <span class="count-pill amber" id="pendingCount">0</span></h2>
+      <div class="seg" id="pendingGroupToggle">
+        <button type="button" data-mode="owner" class="active">按所属人</button>
+        <button type="button" data-mode="company">按快递公司</button>
+      </div>
+    </div>
+    <div id="pendingList"></div>
+    <div class="empty" id="pendingEmpty" hidden>暂无待领取快递</div>
+  </section>
+
+  <section class="section">
+    <details class="picked-section" id="pickedSection">
+      <summary>
+        <span class="summary-title">✅ 已领取 <span class="count-pill green" id="pickedCount">0</span></span>
+        <span class="summary-right">
+          <button type="button" class="icon-btn danger" id="clearPicked">清空</button>
+          <span class="arrow">▼</span>
+        </span>
+      </summary>
+      <div id="pickedGroups"></div>
+    </details>
+  </section>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+  var STORAGE_KEY = "express_records_v1";
+  var records = load();
+  var pendingGroupBy = "owner";
+  var OWNER_KEY = "owner_options_v1";
+  var OWNER_PRESETS = ["钰钰 7576", "钰钰妈妈 6499", "杨杨妈妈 0268", "杨杨爸爸 2278", "杨杨哥 6493"];
+  var ownerOptions = loadOwnerOptions();
+
+  var $ = function (sel) { return document.querySelector(sel); };
+  var $$ = function (sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); };
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function dateKey(ts) {
+    var d = new Date(ts);
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+  function timeStr(ts) {
+    var d = new Date(ts);
+    return pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+  function todayKey() { return dateKey(Date.now()); }
+  function yesterdayKey() { return dateKey(Date.now() - 24 * 3600 * 1000); }
+
+  function groupLabel(key) {
+    if (key === todayKey()) return "今天";
+    if (key === yesterdayKey()) return "昨天";
+    var parts = key.split("-");
+    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    var week = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][d.getDay()];
+    return Number(parts[1]) + "月" + Number(parts[2]) + "日 " + week;
+  }
+
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  function addRecord() {
+    var code = $("#fCode").value.trim();
+    var company = $("#fCompany").value.trim();
+    var owner = $("#fOwner").value.trim();
+    var note = $("#fNote").value.trim();
+    if (!code || !company || !owner) { toast("请填写取件码、快递公司和所属人"); return; }
+
+    records.push({
+      id: uid(),
+      code: code,
+      company: company,
+      owner: owner,
+      note: note,
+      status: "pending",
+      createdAt: Date.now(),
+      pickedAt: null
+    });
+    save();
+    addOwnerOption(owner);
+    $("#addForm").reset();
+    renderOwnerOptions();
+    render();
+    toast("已添加，状态：待领取");
+  }
+
+  function setPicked(id, picked) {
+    var r = records.find(function (x) { return x.id === id; });
+    if (!r) return;
+    if (picked) {
+      r.status = "picked";
+      r.pickedAt = Date.now();
+    } else {
+      r.status = "pending";
+      r.pickedAt = null;
+    }
+    save();
+    render();
+    toast(picked ? "已标记为「已领取」" : "已恢复为「待领取」");
+  }
+
+  function removeRecord(id) {
+    var r = records.find(function (x) { return x.id === id; });
+    if (!r) return;
+    if (!confirm("确定删除该快递？\n取件码：" + r.code + "（" + r.company + "）")) return;
+    records = records.filter(function (x) { return x.id !== id; });
+    save();
+    render();
+    toast("已删除");
+  }
+
+  function filtered() {
+    var kw = $("#search").value.trim().toLowerCase();
+    if (!kw) return records;
+    return records.filter(function (r) {
+      return [r.code, r.company, r.owner, r.note].join(" ").toLowerCase().indexOf(kw) !== -1;
+    });
+  }
+
+  function loadOwnerOptions() {
+    try {
+      var raw = localStorage.getItem(OWNER_KEY);
+      var arr = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(arr)) return arr;
+    } catch (e) {}
+    return OWNER_PRESETS.slice();
+  }
+
+  function saveOwnerOptions() {
+    localStorage.setItem(OWNER_KEY, JSON.stringify(ownerOptions));
+  }
+
+  function addOwnerOption(name) {
+    if (!name) return;
+    if (ownerOptions.indexOf(name) === -1) {
+      ownerOptions.push(name);
+      saveOwnerOptions();
+    }
+  }
+
+  function removeOwnerOption(name) {
+    ownerOptions = ownerOptions.filter(function (o) { return o !== name; });
+    saveOwnerOptions();
+  }
+
+  function mergeRecordOwners() {
+    var changed = false;
+    records.forEach(function (r) {
+      if (r.owner && ownerOptions.indexOf(r.owner) === -1) {
+        ownerOptions.push(r.owner);
+        changed = true;
+      }
+    });
+    if (changed) saveOwnerOptions();
+  }
+
+  function renderOwnerOptions() {
+    var dl = $("#ownerList");
+    dl.innerHTML = "";
+    ownerOptions.forEach(function (name) {
+      var opt = document.createElement("option");
+      opt.value = name;
+      dl.appendChild(opt);
+    });
+    var box = $("#ownerOptions");
+    box.innerHTML = "";
+    ownerOptions.forEach(function (name) {
+      var chip = document.createElement("span");
+      chip.className = "chip";
+      var label = document.createElement("span");
+      label.textContent = name;
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "chip-del";
+      del.textContent = "×";
+      del.title = "删除该选项";
+      del.dataset.owner = name;
+      chip.appendChild(label);
+      chip.appendChild(del);
+      box.appendChild(chip);
+    });
+  }
+
+  function render() {
+    var all = filtered();
+    var pending = all.filter(function (r) { return r.status === "pending"; })
+      .sort(function (a, b) { return b.createdAt - a.createdAt; });
+    var picked = all.filter(function (r) { return r.status === "picked"; })
+      .sort(function (a, b) { return b.pickedAt - a.pickedAt; });
+
+    // 总览统计（不受搜索影响）
+    var totalPending = records.filter(function (r) { return r.status === "pending"; }).length;
+    var totalPicked = records.filter(function (r) { return r.status === "picked"; }).length;
+    $("#statPending").textContent = totalPending;
+    $("#statPicked").textContent = totalPicked;
+    $("#pendingCount").textContent = pending.length;
+    $("#pickedCount").textContent = picked.length;
+
+    // 待领取：按所属人 / 快递公司分组
+    var pendingList = $("#pendingList");
+    pendingList.innerHTML = "";
+    $("#pendingEmpty").hidden = pending.length > 0;
+    var byCompany = pendingGroupBy === "company";
+    var pendingGroups = {};
+    pending.forEach(function (r) {
+      var key = byCompany ? r.company : r.owner;
+      (pendingGroups[key] = pendingGroups[key] || []).push(r);
+    });
+    var groupKeys = Object.keys(pendingGroups).sort(function (a, b) {
+      return a.localeCompare(b, "zh");
+    });
+    groupKeys.forEach(function (key) {
+      var items = pendingGroups[key];
+      var det = document.createElement("details");
+      det.className = "date-group";
+      det.open = true;
+      var inner = '<summary><span>' + (byCompany ? "📦 " : "👤 ") + esc(key) + "（" + items.length + "件）</span><span class=\"arrow\">▼</span></summary><ul class=\"records\">";
+      items.forEach(function (r) {
+        var meta = byCompany
+          ? ('<div class="record-meta">所属人：' + esc(r.owner) + (r.note ? " · " + esc(r.note) : "") + "</div>")
+          : (r.note ? '<div class="record-meta">备注：' + esc(r.note) + "</div>" : "");
+        inner +=
+          '<li class="record">' +
+            '<label class="check-label" title="标记为已领取">' +
+              '<input type="checkbox" data-act="picked" data-id="' + r.id + '" />' +
+              '<span class="custom-check"></span><span class="check-text">领取</span>' +
+            "</label>" +
+            '<div class="record-main">' +
+              '<div class="record-title"><span class="badge">' + esc(r.company) + '</span><span class="code">' + esc(r.code) + "</span></div>" +
+              meta +
+            "</div>" +
+            '<button class="icon-btn danger" data-act="del" data-id="' + r.id + '">删除</button>' +
+          "</li>";
+      });
+      inner += "</ul>";
+      det.innerHTML = inner;
+      pendingList.appendChild(det);
+    });
+
+    // 已领取：按领取日期分组
+    var groups = {};
+    picked.forEach(function (r) {
+      var k = dateKey(r.pickedAt);
+      (groups[k] = groups[k] || []).push(r);
+    });
+    var keys = Object.keys(groups).sort(function (a, b) { return a < b ? 1 : -1; });
+    var container = $("#pickedGroups");
+    container.innerHTML = "";
+    if (keys.length === 0) {
+      container.innerHTML = '<div class="empty">暂无已领取快递</div>';
+    }
+    keys.forEach(function (k) {
+      var items = groups[k];
+      var det = document.createElement("details");
+      det.className = "date-group";
+      det.open = true;
+      var inner = '<summary><span>📅 ' + groupLabel(k) + "（" + items.length + "件）</span><span class=\"arrow\">▼</span></summary><ul class=\"records\">";
+      items.forEach(function (r) {
+        inner +=
+          '<li class="record">' +
+            '<div class="record-main">' +
+              '<div class="record-title"><span class="badge">' + esc(r.company) + '</span><span class="code">' + esc(r.code) + "</span></div>" +
+              '<div class="record-meta">所属人：' + esc(r.owner) + (r.note ? " · " + esc(r.note) : "") + "</div>" +
+            "</div>" +
+            '<span class="time-chip">领取 ' + timeStr(r.pickedAt) + "</span>" +
+            '<button class="icon-btn" data-act="unpick" data-id="' + r.id + '">恢复待领取</button>' +
+            '<button class="icon-btn danger" data-act="del" data-id="' + r.id + '">删除</button>' +
+          "</li>";
+      });
+      inner += "</ul>";
+      det.innerHTML = inner;
+      container.appendChild(det);
+    });
+  }
+
+  var toastTimer;
+  function toast(msg) {
+    var t = $("#toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2200);
+  }
+
+  // 事件委托
+  document.addEventListener("change", function (e) {
+    var t = e.target;
+    if (t && t.dataset && t.dataset.act === "picked") {
+      setPicked(t.dataset.id, t.checked);
+    }
+  });
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    if (t && t.dataset && t.dataset.act === "del") {
+      removeRecord(t.dataset.id);
+    } else if (t && t.dataset && t.dataset.act === "unpick") {
+      setPicked(t.dataset.id, false);
+    }
+  });
+  $("#addForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    addRecord();
+  });
+  $("#search").addEventListener("input", render);
+  $("#ownerOptions").addEventListener("click", function (e) {
+    var btn = e.target.closest(".chip-del");
+    if (!btn) return;
+    removeOwnerOption(btn.dataset.owner);
+    renderOwnerOptions();
+  });
+  $("#pendingGroupToggle").addEventListener("click", function (e) {
+    var btn = e.target.closest("button");
+    if (!btn || !btn.dataset.mode) return;
+    pendingGroupBy = btn.dataset.mode;
+    Array.prototype.forEach.call($("#pendingGroupToggle").querySelectorAll("button"), function (b) {
+      b.classList.toggle("active", b === btn);
+    });
+    render();
+  });
+  $("#clearPicked").addEventListener("click", function (e) {
+    e.stopPropagation();
+    e.preventDefault();
+    var count = records.filter(function (r) { return r.status === "picked"; }).length;
+    if (count === 0) { toast("暂无已领取快递"); return; }
+    if (!confirm("确定清空全部已领取快递（共 " + count + " 条）？此操作不可撤销。")) return;
+    records = records.filter(function (r) { return r.status !== "picked"; });
+    save();
+    render();
+    toast("已清空全部已领取快递");
+  });
+
+  mergeRecordOwners();
+  renderOwnerOptions();
+  render();
+})();
+</script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function (err) {
+        console.warn("SW 注册失败：", err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
