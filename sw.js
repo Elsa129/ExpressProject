@@ -1,11 +1,15 @@
-const CACHE = "express-pwa-v2";
+const CACHE = "express-pwa-v3";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png",
-  "./maskable-512.png"
+  "./maskable-512.png",
+  "./tesseract/tesseract.min.js",
+  "./tesseract/worker.min.js",
+  "./tesseract/tesseract-core.wasm.js",
+  "./tesseract/lang/chi_sim.traineddata.gz"
 ];
 
 self.addEventListener("install", (e) => {

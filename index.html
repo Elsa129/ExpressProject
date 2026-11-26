@@ -72,6 +72,17 @@
   }
   .btn:hover { background: var(--primary-dark); }
   .btn-add { align-self: end; }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .ocr-row {
+    margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    border-top: 1px dashed var(--border); padding-top: 14px;
+  }
+  .btn-ocr { background: #0ea5e9; }
+  .btn-ocr:hover { background: #0284c7; }
+  .btn-ocr-alt { background: #7c3aed; }
+  .btn-ocr-alt:hover { background: #6d28d9; }
+  .ocr-status { font-size: 13px; color: var(--muted); flex: 1; min-width: 200px; }
+  .ocr-status.busy { color: var(--primary); }
   .option-panel { margin-top: 14px; border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: #fafafa; }
   .option-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   .option-panel-title { font-size: 13px; font-weight: 600; color: var(--text); }
@@ -214,6 +225,12 @@
       </div>
       <button type="submit" class="btn btn-add">添加</button>
     </form>
+    <div class="ocr-row">
+      <button type="button" class="btn btn-ocr" id="btnOcrPick">📷 上传截图</button>
+      <button type="button" class="btn btn-ocr btn-ocr-alt" id="btnOcrCamera">📸 拍照</button>
+      <span class="ocr-status" id="ocrStatus">可上传取件通知截图，自动识别快递公司和取件码；所属人请手动选择。</span>
+      <input type="file" id="ocrFile" accept="image/*" hidden />
+    </div>
     <div class="option-panel" id="optionPanel" hidden>
       <div class="option-panel-head">
         <span class="option-panel-title" id="optionPanelTitle">可选项</span>
@@ -255,6 +272,7 @@
 
 <div id="toast"></div>
 
+<script src="./tesseract/tesseract.min.js"></script>
 <script>
 (function () {
   "use strict";
@@ -452,6 +470,104 @@
     $("#optionPanel").hidden = true;
   }
 
+  // ---- 截图 OCR 识别 ----
+  function extractCompany(text) {
+    var map = [
+      { value: "邮政EMS", keys: ["邮政", "EMS", "ems"] },
+      { value: "京东", keys: ["京东"] },
+      { value: "中通", keys: ["中通"] },
+      { value: "圆通", keys: ["圆通"] },
+      { value: "申通", keys: ["申通"] },
+      { value: "韵达", keys: ["韵达"] },
+      { value: "顺丰", keys: ["顺丰"] },
+      { value: "极兔", keys: ["极兔"] },
+      { value: "德邦", keys: ["德邦"] },
+      { value: "菜鸟", keys: ["菜鸟"] }
+    ];
+    for (var i = 0; i < map.length; i++) {
+      for (var j = 0; j < map[i].keys.length; j++) {
+        if (text.indexOf(map[i].keys[j]) !== -1) return map[i].value;
+      }
+    }
+    return "";
+  }
+
+  function normalizeCode(s) {
+    return String(s || "")
+      .replace(/[\s\u3000]+/g, "")
+      .replace(/[\u2014\u2013\u2015\u2212\uFF0D\u4e00]/g, "-")
+      .toUpperCase();
+  }
+
+  function extractCode(text) {
+    var t = text.replace(/\s+/g, " ");
+    var kw = t.match(/(?:取件码|取货码|提货码|取件验证码|取件密码|快递码)[：:\s]*([0-9A-Za-z][0-9A-Za-z\-–—·.\s]{1,12})/);
+    if (kw) {
+      var c = normalizeCode(kw[1]);
+      if (c.length >= 3) return c;
+    }
+    var seg = t.match(/(?:^|[^0-9A-Za-z])([0-9A-Za-z]{1,2}[-–—][0-9A-Za-z]{1,2}[-–—][0-9A-Za-z]{3,6})(?![0-9A-Za-z])/);
+    if (seg) return normalizeCode(seg[1]);
+    var tail = t.match(/(?:码)[：:\s]*([0-9A-Za-z]{4,10})/);
+    if (tail) return normalizeCode(tail[1]);
+    return "";
+  }
+
+  function setOcrBusy(busy) {
+    $("#btnOcrPick").disabled = busy;
+    $("#btnOcrCamera").disabled = busy;
+    $("#ocrStatus").classList.toggle("busy", busy);
+  }
+
+  function applyOcr(text) {
+    var code = extractCode(text);
+    var company = extractCompany(text);
+    var codeInput = $("#fCode");
+    var companyInput = $("#fCompany");
+    var got = [];
+    if (code && !codeInput.value.trim()) { codeInput.value = code; got.push("取件码 " + code); }
+    if (company && !companyInput.value.trim()) { companyInput.value = company; got.push("公司 " + company); }
+    var status = $("#ocrStatus");
+    status.title = text;
+    if (got.length) {
+      status.textContent = "已识别：" + got.join("、") + "。请核对，并手动选择所属人。";
+      toast("识别完成：" + got.join("、"));
+    } else {
+      status.textContent = "未能自动识别，请按原文手动填写（长按此处可查看识别文本）。";
+      toast("未能自动识别取件码/公司，请手动填写");
+    }
+  }
+
+  function runOcr(file) {
+    if (!file) return;
+    if (!window.Tesseract) {
+      toast("OCR 组件未加载，请刷新后重试");
+      return;
+    }
+    var status = $("#ocrStatus");
+    setOcrBusy(true);
+    status.textContent = "正在识别，请稍候…（首次使用需加载约 20MB 语言包）";
+    var base = new URL("./tesseract/", window.location.href).href;
+    Tesseract.recognize(file, "chi_sim", {
+      workerPath: base + "worker.min.js",
+      corePath: base + "tesseract-core.wasm.js",
+      langPath: base + "lang",
+      logger: function (m) {
+        if (m && m.status === "recognizing text") {
+          status.textContent = "识别中 " + Math.round((m.progress || 0) * 100) + "%…";
+        }
+      }
+    }).then(function (res) {
+      applyOcr((res && res.data && res.data.text) || "");
+      setOcrBusy(false);
+    }).catch(function (err) {
+      console.error("OCR 失败", err);
+      toast("识别失败，请手动填写或重试");
+      status.textContent = "识别失败，可手动填写或重新上传";
+      setOcrBusy(false);
+    });
+  }
+
   function render() {
     var all = filtered();
     var pending = all.filter(function (r) { return r.status === "pending"; })
@@ -613,6 +729,21 @@
     save();
     render();
     toast("已清空全部已领取快递");
+  });
+
+  var ocrInput = $("#ocrFile");
+  $("#btnOcrPick").addEventListener("click", function () {
+    ocrInput.removeAttribute("capture");
+    ocrInput.click();
+  });
+  $("#btnOcrCamera").addEventListener("click", function () {
+    ocrInput.setAttribute("capture", "environment");
+    ocrInput.click();
+  });
+  ocrInput.addEventListener("change", function () {
+    var f = ocrInput.files && ocrInput.files[0];
+    if (f) runOcr(f);
+    ocrInput.value = "";
   });
 
   mergeRecordOwners();
