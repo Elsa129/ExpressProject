@@ -1,4 +1,4 @@
-const CACHE = "express-pwa-v1";
+const CACHE = "express-pwa-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -24,6 +24,22 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+
+  // 页面导航：网络优先，保证更新能生效；离线时回退缓存
+  if (e.request.mode === "navigate") {
+    e.respondWith(
+      fetch(e.request)
+        .then((resp) => {
+          const clone = resp.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, clone));
+          return resp;
+        })
+        .catch(() => caches.match(e.request).then((r) => r || caches.match("./index.html")))
+    );
+    return;
+  }
+
+  // 静态资源：缓存优先，离线可用
   e.respondWith(
     caches.match(e.request).then((cached) => {
       if (cached) return cached;

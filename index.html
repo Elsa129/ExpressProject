@@ -72,18 +72,26 @@
   }
   .btn:hover { background: var(--primary-dark); }
   .btn-add { align-self: end; }
-  .owner-options { margin-top: 14px; display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
-  .owner-options-label { font-size: 12px; color: var(--muted); padding-top: 5px; white-space: nowrap; }
-  #ownerOptions { display: inline-flex; flex-wrap: wrap; gap: 6px; }
-  .chip {
-    display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px 3px 10px;
-    background: #eef2ff; color: var(--primary); border-radius: 999px; font-size: 12px; font-weight: 600;
+  .option-panel { margin-top: 14px; border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: #fafafa; }
+  .option-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .option-panel-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .option-panel-hint { font-size: 12px; color: var(--muted); }
+  .option-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .option-item {
+    display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px;
+    background: #fff; overflow: hidden; transition: border-color .15s;
   }
-  .chip-del {
-    border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px;
-    line-height: 1; padding: 0 4px; border-radius: 50%; transition: all .15s;
+  .option-item:hover { border-color: var(--primary); }
+  .option-pick {
+    border: none; background: transparent; padding: 7px 12px; font: inherit; font-size: 13px;
+    cursor: pointer; color: var(--text); white-space: nowrap;
   }
-  .chip-del:hover { color: var(--red); background: #fce8e6; }
+  .option-del {
+    border: none; background: transparent; color: var(--muted); padding: 0 8px; font-size: 16px;
+    cursor: pointer; line-height: 1; transition: color .15s;
+  }
+  .option-del:hover { color: var(--red); }
+  .option-empty { font-size: 13px; color: var(--muted); }
 
   .toolbar { margin-bottom: 14px; }
   .toolbar input { max-width: 320px; }
@@ -194,24 +202,11 @@
       </div>
       <div class="field">
         <label for="fCompany">快递公司 *</label>
-        <input id="fCompany" list="companyList" placeholder="选择或输入" required />
-        <datalist id="companyList">
-          <option value="中通"></option>
-          <option value="圆通"></option>
-          <option value="申通"></option>
-          <option value="韵达"></option>
-          <option value="顺丰"></option>
-          <option value="京东"></option>
-          <option value="邮政EMS"></option>
-          <option value="极兔"></option>
-          <option value="德邦"></option>
-          <option value="菜鸟"></option>
-          <option value="其他"></option>
-        </datalist>
+        <input id="fCompany" placeholder="选择或输入" required />
       </div>
       <div class="field">
         <label for="fOwner">所属人 *</label>
-        <input id="fOwner" list="ownerList" placeholder="选择或输入姓名" required /><datalist id="ownerList"></datalist>
+        <input id="fOwner" placeholder="选择或输入姓名" required />
       </div>
       <div class="field">
         <label for="fNote">备注</label>
@@ -219,9 +214,12 @@
       </div>
       <button type="submit" class="btn btn-add">添加</button>
     </form>
-    <div class="owner-options">
-      <span class="owner-options-label">所属人选项：</span>
-      <span id="ownerOptions"></span>
+    <div class="option-panel" id="optionPanel" hidden>
+      <div class="option-panel-head">
+        <span class="option-panel-title" id="optionPanelTitle">可选项</span>
+        <span class="option-panel-hint" id="optionPanelHint"></span>
+      </div>
+      <div class="option-list" id="optionList"></div>
     </div>
   </section>
 
@@ -266,6 +264,8 @@
   var OWNER_KEY = "owner_options_v1";
   var OWNER_PRESETS = ["钰钰 7576", "钰钰妈妈 6499", "杨杨妈妈 0268", "杨杨爸爸 2278", "杨杨哥 6493"];
   var ownerOptions = loadOwnerOptions();
+  var COMPANY_PRESETS = ["中通", "圆通", "申通", "韵达", "顺丰", "京东", "邮政EMS", "极兔", "德邦", "菜鸟", "其他"];
+  var activeField = null;
 
   var $ = function (sel) { return document.querySelector(sel); };
   var $$ = function (sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); };
@@ -334,7 +334,6 @@
     save();
     addOwnerOption(owner);
     $("#addForm").reset();
-    renderOwnerOptions();
     render();
     toast("已添加，状态：待领取");
   }
@@ -409,31 +408,48 @@
     if (changed) saveOwnerOptions();
   }
 
-  function renderOwnerOptions() {
-    var dl = $("#ownerList");
-    dl.innerHTML = "";
-    ownerOptions.forEach(function (name) {
-      var opt = document.createElement("option");
-      opt.value = name;
-      dl.appendChild(opt);
+  function showOptionsFor(field) {
+    activeField = field;
+    var title = $("#optionPanelTitle");
+    var hint = $("#optionPanelHint");
+    var list = $("#optionList");
+    list.innerHTML = "";
+    var options = field === "company" ? COMPANY_PRESETS : ownerOptions;
+    var deletable = field === "owner";
+    title.textContent = field === "company" ? "选择快递公司" : "选择所属人";
+    hint.textContent = deletable ? "点击选择，点 × 删除" : "点击选择";
+    options.forEach(function (name) {
+      var item = document.createElement("span");
+      item.className = "option-item";
+      var pick = document.createElement("button");
+      pick.type = "button";
+      pick.className = "option-pick";
+      pick.textContent = name;
+      pick.dataset.value = name;
+      item.appendChild(pick);
+      if (deletable) {
+        var del = document.createElement("button");
+        del.type = "button";
+        del.className = "option-del";
+        del.textContent = "×";
+        del.title = "删除该选项";
+        del.dataset.value = name;
+        item.appendChild(del);
+      }
+      list.appendChild(item);
     });
-    var box = $("#ownerOptions");
-    box.innerHTML = "";
-    ownerOptions.forEach(function (name) {
-      var chip = document.createElement("span");
-      chip.className = "chip";
-      var label = document.createElement("span");
-      label.textContent = name;
-      var del = document.createElement("button");
-      del.type = "button";
-      del.className = "chip-del";
-      del.textContent = "×";
-      del.title = "删除该选项";
-      del.dataset.owner = name;
-      chip.appendChild(label);
-      chip.appendChild(del);
-      box.appendChild(chip);
-    });
+    if (options.length === 0) {
+      var empty = document.createElement("span");
+      empty.className = "option-empty";
+      empty.textContent = "暂无选项，输入新所属人后会自动添加";
+      list.appendChild(empty);
+    }
+    $("#optionPanel").hidden = false;
+  }
+
+  function hideOptions() {
+    activeField = null;
+    $("#optionPanel").hidden = true;
   }
 
   function render() {
@@ -557,11 +573,26 @@
     addRecord();
   });
   $("#search").addEventListener("input", render);
-  $("#ownerOptions").addEventListener("click", function (e) {
-    var btn = e.target.closest(".chip-del");
-    if (!btn) return;
-    removeOwnerOption(btn.dataset.owner);
-    renderOwnerOptions();
+  $("#fCompany").addEventListener("focus", function () { showOptionsFor("company"); });
+  $("#fOwner").addEventListener("focus", function () { showOptionsFor("owner"); });
+  $("#fCompany").addEventListener("blur", function () { setTimeout(function () { if (activeField === "company") hideOptions(); }, 200); });
+  $("#fOwner").addEventListener("blur", function () { setTimeout(function () { if (activeField === "owner") hideOptions(); }, 200); });
+
+  $("#optionList").addEventListener("pointerdown", function (e) {
+    if (e.target.closest(".option-pick, .option-del")) e.preventDefault();
+  });
+  $("#optionList").addEventListener("click", function (e) {
+    var pick = e.target.closest(".option-pick");
+    var del = e.target.closest(".option-del");
+    if (pick) {
+      var input = activeField === "company" ? $("#fCompany") : $("#fOwner");
+      input.value = pick.dataset.value;
+      hideOptions();
+      input.blur();
+    } else if (del) {
+      removeOwnerOption(del.dataset.value);
+      showOptionsFor("owner");
+    }
   });
   $("#pendingGroupToggle").addEventListener("click", function (e) {
     var btn = e.target.closest("button");
@@ -585,12 +616,16 @@
   });
 
   mergeRecordOwners();
-  renderOwnerOptions();
   render();
 })();
 </script>
 <script>
   if ("serviceWorker" in navigator) {
+    var firstRun = !navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (firstRun) { firstRun = false; return; }
+      window.location.reload();
+    });
     window.addEventListener("load", function () {
       navigator.serviceWorker.register("sw.js").catch(function (err) {
         console.warn("SW 注册失败：", err);
