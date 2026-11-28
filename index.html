@@ -73,16 +73,13 @@
   .btn:hover { background: var(--primary-dark); }
   .btn-add { align-self: end; }
   .btn:disabled { opacity: .55; cursor: not-allowed; }
-  .ocr-row {
-    margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-    border-top: 1px dashed var(--border); padding-top: 14px;
+  .select-field {
+    font: inherit; padding: 9px 11px; border: 1px solid var(--border); border-radius: 9px;
+    background: #fff; color: var(--text); outline: none; width: 100%; text-align: left; cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .btn-ocr { background: #0ea5e9; }
-  .btn-ocr:hover { background: #0284c7; }
-  .btn-ocr-alt { background: #7c3aed; }
-  .btn-ocr-alt:hover { background: #6d28d9; }
-  .ocr-status { font-size: 13px; color: var(--muted); flex: 1; min-width: 200px; }
-  .ocr-status.busy { color: var(--primary); }
+  .select-field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+  .select-field.placeholder { color: var(--muted); }
   .option-panel { margin-top: 14px; border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: #fafafa; }
   .option-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   .option-panel-title { font-size: 13px; font-weight: 600; color: var(--text); }
@@ -103,6 +100,14 @@
   }
   .option-del:hover { color: var(--red); }
   .option-empty { font-size: 13px; color: var(--muted); }
+  .option-add-row { margin-top: 10px; }
+  .option-add-form { margin-top: 10px; display: flex; gap: 8px; align-items: center; }
+  .option-add-form input { flex: 1; }
+  .btn-ghost {
+    font: inherit; background: #fff; color: var(--primary); border: 1px dashed var(--primary);
+    border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px; white-space: nowrap;
+  }
+  .btn-ghost:hover { background: #eef2ff; }
 
   .toolbar { margin-bottom: 14px; }
   .toolbar input { max-width: 320px; }
@@ -213,35 +218,33 @@
       </div>
       <div class="field">
         <label for="fCompany">快递公司 *</label>
-        <input id="fCompany" placeholder="选择或输入" required />
+        <button type="button" class="select-field placeholder" id="fCompany">请选择快递公司</button>
       </div>
       <div class="field">
         <label for="fOwner">所属人 *</label>
-        <input id="fOwner" placeholder="选择或输入姓名" required />
-      </div>
-      <div class="field">
-        <label for="fNote">备注</label>
-        <input id="fNote" placeholder="选填" />
+        <button type="button" class="select-field placeholder" id="fOwner">请选择所属人</button>
       </div>
       <button type="submit" class="btn btn-add">添加</button>
     </form>
-    <div class="ocr-row">
-      <button type="button" class="btn btn-ocr" id="btnOcrPick">📷 上传截图</button>
-      <button type="button" class="btn btn-ocr btn-ocr-alt" id="btnOcrCamera">📸 拍照</button>
-      <span class="ocr-status" id="ocrStatus">可上传取件通知截图，自动识别快递公司和取件码；所属人请手动选择。</span>
-      <input type="file" id="ocrFile" accept="image/*" hidden />
-    </div>
     <div class="option-panel" id="optionPanel" hidden>
       <div class="option-panel-head">
         <span class="option-panel-title" id="optionPanelTitle">可选项</span>
         <span class="option-panel-hint" id="optionPanelHint"></span>
       </div>
       <div class="option-list" id="optionList"></div>
+      <div class="option-add-row">
+        <button type="button" class="btn-ghost" id="btnAddOption">＋ 添加新选项</button>
+      </div>
+      <div class="option-add-form" id="optionAddForm" hidden>
+        <input id="newOptionInput" placeholder="输入新选项后确认" />
+        <button type="button" class="btn-ghost" id="btnConfirmAdd">确认</button>
+        <button type="button" class="btn-ghost" id="btnCancelAdd">取消</button>
+      </div>
     </div>
   </section>
 
   <div class="toolbar">
-    <input id="search" type="search" placeholder="🔍 搜索取件码 / 公司 / 所属人 / 备注" />
+    <input id="search" type="search" placeholder="🔍 搜索取件码 / 公司 / 所属人" />
   </div>
 
   <section class="section">
@@ -272,7 +275,6 @@
 
 <div id="toast"></div>
 
-<script src="./tesseract/tesseract.min.js"></script>
 <script>
 (function () {
   "use strict";
@@ -282,7 +284,13 @@
   var OWNER_KEY = "owner_options_v1";
   var OWNER_PRESETS = ["钰钰 7576", "钰钰妈妈 6499", "杨杨妈妈 0268", "杨杨爸爸 2278", "杨杨哥 6493"];
   var ownerOptions = loadOwnerOptions();
+  var COMPANY_KEY = "company_options_v1";
   var COMPANY_PRESETS = ["中通", "圆通", "申通", "韵达", "顺丰", "京东", "邮政EMS", "极兔", "德邦", "菜鸟", "其他"];
+  var companyOptions = loadCompanyOptions();
+  var LAST_COMPANY_KEY = "last_company_v1";
+  var LAST_OWNER_KEY = "last_owner_v1";
+  var selectedCompany = loadLastValue(LAST_COMPANY_KEY);
+  var selectedOwner = loadLastValue(LAST_OWNER_KEY);
   var activeField = null;
 
   var $ = function (sel) { return document.querySelector(sel); };
@@ -299,6 +307,28 @@
   }
   function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  }
+
+  function loadLastValue(key) {
+    try { return localStorage.getItem(key) || ""; } catch (e) { return ""; }
+  }
+  function saveLastValue(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) {}
+  }
+  function getFieldValue(field) {
+    return field === "company" ? selectedCompany : selectedOwner;
+  }
+  function setFieldValue(field, value) {
+    value = value || "";
+    var btn = field === "company" ? $("#fCompany") : $("#fOwner");
+    if (field === "company") { selectedCompany = value; } else { selectedOwner = value; }
+    if (value) {
+      btn.textContent = value;
+      btn.classList.remove("placeholder");
+    } else {
+      btn.textContent = field === "company" ? "请选择快递公司" : "请选择所属人";
+      btn.classList.add("placeholder");
+    }
   }
 
   function esc(s) {
@@ -333,10 +363,9 @@
   }
 
   function addRecord() {
-    var code = $("#fCode").value.trim();
-    var company = $("#fCompany").value.trim();
-    var owner = $("#fOwner").value.trim();
-    var note = $("#fNote").value.trim();
+    var code = $("#fCode").value.trim().replace(/[\s\u3000]+/g, "");
+    var company = getFieldValue("company");
+    var owner = getFieldValue("owner");
     if (!code || !company || !owner) { toast("请填写取件码、快递公司和所属人"); return; }
 
     records.push({
@@ -344,14 +373,16 @@
       code: code,
       company: company,
       owner: owner,
-      note: note,
       status: "pending",
       createdAt: Date.now(),
       pickedAt: null
     });
     save();
     addOwnerOption(owner);
-    $("#addForm").reset();
+    addCompanyOption(company);
+    saveLastValue(LAST_COMPANY_KEY, company);
+    saveLastValue(LAST_OWNER_KEY, owner);
+    $("#fCode").value = "";
     render();
     toast("已添加，状态：待领取");
   }
@@ -385,7 +416,7 @@
     var kw = $("#search").value.trim().toLowerCase();
     if (!kw) return records;
     return records.filter(function (r) {
-      return [r.code, r.company, r.owner, r.note].join(" ").toLowerCase().indexOf(kw) !== -1;
+      return [r.code, r.company, r.owner].join(" ").toLowerCase().indexOf(kw) !== -1;
     });
   }
 
@@ -415,6 +446,27 @@
     saveOwnerOptions();
   }
 
+  function loadCompanyOptions() {
+    try {
+      var raw = localStorage.getItem(COMPANY_KEY);
+      var arr = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(arr)) return arr;
+    } catch (e) {}
+    return COMPANY_PRESETS.slice();
+  }
+
+  function saveCompanyOptions() {
+    localStorage.setItem(COMPANY_KEY, JSON.stringify(companyOptions));
+  }
+
+  function addCompanyOption(name) {
+    if (!name) return;
+    if (companyOptions.indexOf(name) === -1) {
+      companyOptions.push(name);
+      saveCompanyOptions();
+    }
+  }
+
   function mergeRecordOwners() {
     var changed = false;
     records.forEach(function (r) {
@@ -426,16 +478,30 @@
     if (changed) saveOwnerOptions();
   }
 
+  function mergeRecordCompanies() {
+    var changed = false;
+    records.forEach(function (r) {
+      if (r.company && companyOptions.indexOf(r.company) === -1) {
+        companyOptions.push(r.company);
+        changed = true;
+      }
+    });
+    if (changed) saveCompanyOptions();
+  }
+
   function showOptionsFor(field) {
     activeField = field;
     var title = $("#optionPanelTitle");
     var hint = $("#optionPanelHint");
     var list = $("#optionList");
+    var addBtn = $("#btnAddOption");
     list.innerHTML = "";
-    var options = field === "company" ? COMPANY_PRESETS : ownerOptions;
+    var options = field === "company" ? companyOptions : ownerOptions;
     var deletable = field === "owner";
     title.textContent = field === "company" ? "选择快递公司" : "选择所属人";
     hint.textContent = deletable ? "点击选择，点 × 删除" : "点击选择";
+    addBtn.textContent = field === "company" ? "＋ 添加新快递公司" : "＋ 添加新所属人";
+    $("#optionAddForm").hidden = true;
     options.forEach(function (name) {
       var item = document.createElement("span");
       item.className = "option-item";
@@ -459,7 +525,7 @@
     if (options.length === 0) {
       var empty = document.createElement("span");
       empty.className = "option-empty";
-      empty.textContent = "暂无选项，输入新所属人后会自动添加";
+      empty.textContent = "暂无选项，点击下方按钮添加";
       list.appendChild(empty);
     }
     $("#optionPanel").hidden = false;
@@ -468,104 +534,6 @@
   function hideOptions() {
     activeField = null;
     $("#optionPanel").hidden = true;
-  }
-
-  // ---- 截图 OCR 识别 ----
-  function extractCompany(text) {
-    var map = [
-      { value: "邮政EMS", keys: ["邮政", "EMS", "ems"] },
-      { value: "京东", keys: ["京东"] },
-      { value: "中通", keys: ["中通"] },
-      { value: "圆通", keys: ["圆通"] },
-      { value: "申通", keys: ["申通"] },
-      { value: "韵达", keys: ["韵达"] },
-      { value: "顺丰", keys: ["顺丰"] },
-      { value: "极兔", keys: ["极兔"] },
-      { value: "德邦", keys: ["德邦"] },
-      { value: "菜鸟", keys: ["菜鸟"] }
-    ];
-    for (var i = 0; i < map.length; i++) {
-      for (var j = 0; j < map[i].keys.length; j++) {
-        if (text.indexOf(map[i].keys[j]) !== -1) return map[i].value;
-      }
-    }
-    return "";
-  }
-
-  function normalizeCode(s) {
-    return String(s || "")
-      .replace(/[\s\u3000]+/g, "")
-      .replace(/[\u2014\u2013\u2015\u2212\uFF0D\u4e00]/g, "-")
-      .toUpperCase();
-  }
-
-  function extractCode(text) {
-    var t = text.replace(/\s+/g, " ");
-    var kw = t.match(/(?:取件码|取货码|提货码|取件验证码|取件密码|快递码)[：:\s]*([0-9A-Za-z][0-9A-Za-z\-–—·.\s]{1,12})/);
-    if (kw) {
-      var c = normalizeCode(kw[1]);
-      if (c.length >= 3) return c;
-    }
-    var seg = t.match(/(?:^|[^0-9A-Za-z])([0-9A-Za-z]{1,2}[-–—][0-9A-Za-z]{1,2}[-–—][0-9A-Za-z]{3,6})(?![0-9A-Za-z])/);
-    if (seg) return normalizeCode(seg[1]);
-    var tail = t.match(/(?:码)[：:\s]*([0-9A-Za-z]{4,10})/);
-    if (tail) return normalizeCode(tail[1]);
-    return "";
-  }
-
-  function setOcrBusy(busy) {
-    $("#btnOcrPick").disabled = busy;
-    $("#btnOcrCamera").disabled = busy;
-    $("#ocrStatus").classList.toggle("busy", busy);
-  }
-
-  function applyOcr(text) {
-    var code = extractCode(text);
-    var company = extractCompany(text);
-    var codeInput = $("#fCode");
-    var companyInput = $("#fCompany");
-    var got = [];
-    if (code && !codeInput.value.trim()) { codeInput.value = code; got.push("取件码 " + code); }
-    if (company && !companyInput.value.trim()) { companyInput.value = company; got.push("公司 " + company); }
-    var status = $("#ocrStatus");
-    status.title = text;
-    if (got.length) {
-      status.textContent = "已识别：" + got.join("、") + "。请核对，并手动选择所属人。";
-      toast("识别完成：" + got.join("、"));
-    } else {
-      status.textContent = "未能自动识别，请按原文手动填写（长按此处可查看识别文本）。";
-      toast("未能自动识别取件码/公司，请手动填写");
-    }
-  }
-
-  function runOcr(file) {
-    if (!file) return;
-    if (!window.Tesseract) {
-      toast("OCR 组件未加载，请刷新后重试");
-      return;
-    }
-    var status = $("#ocrStatus");
-    setOcrBusy(true);
-    status.textContent = "正在识别，请稍候…（首次使用需加载约 20MB 语言包）";
-    var base = new URL("./tesseract/", window.location.href).href;
-    Tesseract.recognize(file, "chi_sim", {
-      workerPath: base + "worker.min.js",
-      corePath: base + "tesseract-core.wasm.js",
-      langPath: base + "lang",
-      logger: function (m) {
-        if (m && m.status === "recognizing text") {
-          status.textContent = "识别中 " + Math.round((m.progress || 0) * 100) + "%…";
-        }
-      }
-    }).then(function (res) {
-      applyOcr((res && res.data && res.data.text) || "");
-      setOcrBusy(false);
-    }).catch(function (err) {
-      console.error("OCR 失败", err);
-      toast("识别失败，请手动填写或重试");
-      status.textContent = "识别失败，可手动填写或重新上传";
-      setOcrBusy(false);
-    });
   }
 
   function render() {
@@ -604,8 +572,8 @@
       var inner = '<summary><span>' + (byCompany ? "📦 " : "👤 ") + esc(key) + "（" + items.length + "件）</span><span class=\"arrow\">▼</span></summary><ul class=\"records\">";
       items.forEach(function (r) {
         var meta = byCompany
-          ? ('<div class="record-meta">所属人：' + esc(r.owner) + (r.note ? " · " + esc(r.note) : "") + "</div>")
-          : (r.note ? '<div class="record-meta">备注：' + esc(r.note) + "</div>" : "");
+          ? '<div class="record-meta">所属人：' + esc(r.owner) + "</div>"
+          : "";
         inner +=
           '<li class="record">' +
             '<label class="check-label" title="标记为已领取">' +
@@ -647,7 +615,7 @@
           '<li class="record">' +
             '<div class="record-main">' +
               '<div class="record-title"><span class="badge">' + esc(r.company) + '</span><span class="code">' + esc(r.code) + "</span></div>" +
-              '<div class="record-meta">所属人：' + esc(r.owner) + (r.note ? " · " + esc(r.note) : "") + "</div>" +
+              '<div class="record-meta">所属人：' + esc(r.owner) + "</div>" +
             "</div>" +
             '<span class="time-chip">领取 ' + timeStr(r.pickedAt) + "</span>" +
             '<button class="icon-btn" data-act="unpick" data-id="' + r.id + '">恢复待领取</button>' +
@@ -689,10 +657,22 @@
     addRecord();
   });
   $("#search").addEventListener("input", render);
-  $("#fCompany").addEventListener("focus", function () { showOptionsFor("company"); });
-  $("#fOwner").addEventListener("focus", function () { showOptionsFor("owner"); });
-  $("#fCompany").addEventListener("blur", function () { setTimeout(function () { if (activeField === "company") hideOptions(); }, 200); });
-  $("#fOwner").addEventListener("blur", function () { setTimeout(function () { if (activeField === "owner") hideOptions(); }, 200); });
+  $("#fCode").addEventListener("input", function () {
+    this.value = this.value.replace(/[\s\u3000]+/g, "");
+  });
+  $("#fCompany").addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (activeField === "company") { hideOptions(); } else { showOptionsFor("company"); }
+  });
+  $("#fOwner").addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (activeField === "owner") { hideOptions(); } else { showOptionsFor("owner"); }
+  });
+  document.addEventListener("click", function (e) {
+    if (activeField && !e.target.closest("#optionPanel") && !e.target.closest("#fCompany") && !e.target.closest("#fOwner")) {
+      hideOptions();
+    }
+  });
 
   $("#optionList").addEventListener("pointerdown", function (e) {
     if (e.target.closest(".option-pick, .option-del")) e.preventDefault();
@@ -701,14 +681,32 @@
     var pick = e.target.closest(".option-pick");
     var del = e.target.closest(".option-del");
     if (pick) {
-      var input = activeField === "company" ? $("#fCompany") : $("#fOwner");
-      input.value = pick.dataset.value;
+      setFieldValue(activeField, pick.dataset.value);
       hideOptions();
-      input.blur();
     } else if (del) {
       removeOwnerOption(del.dataset.value);
+      if (activeField === "owner" && selectedOwner === del.dataset.value) setFieldValue("owner", "");
       showOptionsFor("owner");
     }
+  });
+  $("#btnAddOption").addEventListener("click", function () {
+    $("#newOptionInput").value = "";
+    $("#optionAddForm").hidden = false;
+    $("#newOptionInput").focus();
+  });
+  $("#btnConfirmAdd").addEventListener("click", function () {
+    var value = $("#newOptionInput").value.trim();
+    if (!value) { toast("请输入新选项"); return; }
+    if (activeField === "company") { addCompanyOption(value); } else { addOwnerOption(value); }
+    setFieldValue(activeField, value);
+    $("#optionAddForm").hidden = true;
+    hideOptions();
+  });
+  $("#btnCancelAdd").addEventListener("click", function () {
+    $("#optionAddForm").hidden = true;
+  });
+  $("#newOptionInput").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); $("#btnConfirmAdd").click(); }
   });
   $("#pendingGroupToggle").addEventListener("click", function (e) {
     var btn = e.target.closest("button");
@@ -731,22 +729,10 @@
     toast("已清空全部已领取快递");
   });
 
-  var ocrInput = $("#ocrFile");
-  $("#btnOcrPick").addEventListener("click", function () {
-    ocrInput.removeAttribute("capture");
-    ocrInput.click();
-  });
-  $("#btnOcrCamera").addEventListener("click", function () {
-    ocrInput.setAttribute("capture", "environment");
-    ocrInput.click();
-  });
-  ocrInput.addEventListener("change", function () {
-    var f = ocrInput.files && ocrInput.files[0];
-    if (f) runOcr(f);
-    ocrInput.value = "";
-  });
-
   mergeRecordOwners();
+  mergeRecordCompanies();
+  setFieldValue("company", selectedCompany);
+  setFieldValue("owner", selectedOwner);
   render();
 })();
 </script>
