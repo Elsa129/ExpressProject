@@ -536,6 +536,33 @@
     $("#optionPanel").hidden = true;
   }
 
+  function codeSegments(code) {
+    var s = String(code == null ? "" : code).toUpperCase();
+    var m = s.match(/[0-9]+|[A-Z]+/g) || [];
+    return m.map(function (p) {
+      if (/^[0-9]+$/.test(p)) return { kind: 1, num: parseInt(p, 10), str: "" };
+      return { kind: 0, num: 0, str: p };
+    });
+  }
+
+  function compareCodes(a, b) {
+    var A = codeSegments(a);
+    var B = codeSegments(b);
+    var len = Math.max(A.length, B.length);
+    for (var i = 0; i < len; i++) {
+      var x = A[i], y = B[i];
+      if (!x) return -1;
+      if (!y) return 1;
+      if (x.kind !== y.kind) return x.kind - y.kind;
+      if (x.kind === 1) {
+        if (x.num !== y.num) return x.num - y.num;
+      } else {
+        if (x.str !== y.str) return x.str < y.str ? -1 : 1;
+      }
+    }
+    return 0;
+  }
+
   function render() {
     var all = filtered();
     var pending = all.filter(function (r) { return r.status === "pending"; })
@@ -566,6 +593,7 @@
     });
     groupKeys.forEach(function (key) {
       var items = pendingGroups[key];
+      if (byCompany) items.sort(compareCodes);
       var det = document.createElement("details");
       det.className = "date-group";
       det.open = true;
